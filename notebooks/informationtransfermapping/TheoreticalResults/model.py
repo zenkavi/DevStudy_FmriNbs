@@ -72,7 +72,7 @@ def generateStructuralNetwork(ncommunities=5, innetwork_dsity=.35, outnetwork_ds
     np.fill_diagonal(W, 1)
 
     if showplot:
-	plt.figure()
+        plt.figure()
         plt.imshow(W, origin='lower',cmap='bwr')
         plt.title('Structural Matrix with 5 communities\nand 1 hub-network', y=1.08)
         plt.xlabel('Regions')
@@ -112,7 +112,7 @@ def generateSynapticNetwork(W, showplot=False):
     #G = G/np.sqrt(totalnodes)
 
     if showplot:
-	plt.figure()
+        plt.figure()
         plt.imshow(G, origin='lower')#, vmin=0, vmax=20)
         plt.colorbar()
         plt.title('Synaptic Weight Matrix -- Coupling Matrix', y=1.08)
@@ -425,7 +425,7 @@ def runSubjectRuns(subj, s=1.0, g=1.0):
     ######################
     #### 3. ESTIMATE RESTING-STATE FC 
     # Pre-fMRI
-    print 'Computing Resting-state FC Estimates'
+    print('Computing Resting-state FC Estimates')
     fcmat_pearson = np.corrcoef(rest_bold)
     fcmat_mreg = mreg.multregressionconnectivity(rest_bold)
     ######################
@@ -437,7 +437,7 @@ def runSubjectRuns(subj, s=1.0, g=1.0):
     actflow_mreg2 = {}
     task_betas = {}
     for task in range(1,ntasks+1):
-        print 'Running subject', subj, 'task', task
+        print ('Running subject', subj, 'task', task)
         # Generate empty output variables
         actflow_mreg2[task] = {}
         for i in range(ncommunities):
