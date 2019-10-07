@@ -1,2 +1,4 @@
 .out
 nipype_mem
+nilearn_cache
+.ipynb_checkpoints
