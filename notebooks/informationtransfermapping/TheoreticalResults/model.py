@@ -138,9 +138,9 @@ def networkModel(G, Tmax=100,dt=.1,g=1.0,s=1.0,tau=1,I=None, noise=None):
     totalnodes = G.shape[0]
 
     # External input (or task-evoked input) && noise input
-    if I==None: I = np.zeros((totalnodes,len(T)))
+    if I is None: I = np.zeros((totalnodes,len(T)))
     # Noise parameter
-    if noise == None: noise = np.zeros((totalnodes,len(T)))
+    if noise is None: noise = np.zeros((totalnodes,len(T)))
     if noise == 1: noise = np.random.normal(size=(totalnodes,len(T)))
 
     # Initial conditions and empty arrays
@@ -476,7 +476,7 @@ def runSubjectRuns(subj, s=1.0, g=1.0):
 
             # Identify regions in the hub network and this local network that have connections
             stimsize = np.floor(nodespercommunity/4.0)
-            stim_nodes2 = local_regions[0:stimsize] 
+            stim_nodes2 = local_regions[0:int(stimsize)] 
 
             # Stack hub nodes with local network nodes
             stim_nodes = np.hstack((stim_nodes,stim_nodes2))

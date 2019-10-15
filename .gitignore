@@ -2,3 +2,7 @@
 nipype_mem
 nilearn_cache
 .ipynb_checkpoints
+__pycache__
+ItoEtAl2017_Simulations
+ItoEtAl2017_ComputationalModelGroupAnalysis.ipynb
+ItoEtAl2017_ComputationalModelTutorial.ipynb
