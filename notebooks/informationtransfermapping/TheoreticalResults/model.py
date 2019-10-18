@@ -257,6 +257,7 @@ def runTaskGLM(taskdata, timing):
     # Define empty variables
     task_resids = np.zeros(taskdata.shape)
     task_betas = np.zeros((nregions,))
+    task_betas_ci = np.zeros((nregions,2))
     task_tvals = np.zeros((nregions,))
     # Performing a GLM for each region
     for region in range(0,nregions):
@@ -265,12 +266,14 @@ def runTaskGLM(taskdata, timing):
         results = model.fit()
         # Save betas
         task_betas[region]=results.params[1]
+        #Save confidence intervals
+        task_betas_ci[region] = results.conf_int(alpha=0.05, cols=None)[1]
         # Save t values
         task_tvals[region]=results.tvalues[1]
         # Save residuals
         task_resids[region,:]=results.resid
     
-    return task_betas, task_resids, task_tvals
+    return task_betas, task_resids, task_tvals, task_betas_ci
 
 def computeActFlowBetweenNetworks(fc_mat, task_betas, ncommunities, nodespercommunity, posOnly=False):
     """
