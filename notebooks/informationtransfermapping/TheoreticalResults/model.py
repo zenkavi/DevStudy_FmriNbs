@@ -122,7 +122,7 @@ def generateSynapticNetwork(W, showplot=False):
         
     return G
 
-def networkModel(G, Tmax=100,dt=.1,g=1.0,s=1.0,tau=1,I=None, noise=None, correction_step = 0):
+def networkModel(G, Tmax=100,dt=.1,g=1.0,s=1.0,tau=1,I=None, noise=None):
     """
     G = Synaptic Weight Matrix
     Tmax = 100      (1sec / 1000ms)
@@ -136,8 +136,7 @@ def networkModel(G, Tmax=100,dt=.1,g=1.0,s=1.0,tau=1,I=None, noise=None, correct
     """
     T = np.arange(0, Tmax, dt)
     totalnodes = G.shape[0]
-    cs = correction_step
-
+  
     # External input (or task-evoked input) && noise input
     if I is None: I = np.zeros((totalnodes,len(T)))
     # Noise parameter
@@ -151,43 +150,28 @@ def networkModel(G, Tmax=100,dt=.1,g=1.0,s=1.0,tau=1,I=None, noise=None, correct
     Enodes[:,0] = Einit
 
     spont_act = np.zeros((totalnodes,))
+
     for t in range(len(T)-1):
 
-        if t==0:
-            ## Solve using Runge-Kutta Order 2 Method
-            # With auto-correlation
-            spont_act = (noise[:,t] + I[:,t])
-            k1e = -Enodes[:,t] + g*np.dot(G,phi(spont_act)) # Coupling
-            k1e += s*phi(Enodes[:,t]) + spont_act# Local processing
-            k1e = k1e/tau
-            # 
-            ave = Enodes[:,t] + k1e*dt
-            #
-            # With auto-correlation
-            spont_act = (noise[:,t+1] + I[:,t+1])
-            k2e = -ave + g*np.dot(G,phi(spont_act)) # Coupling
-            k2e += s*phi(ave) + spont_act # Local processing
-            k2e = k2e/tau
+        ## Solve using Runge-Kutta Order 2 Method
+        # With auto-correlation
+        spont_act = (noise[:,t] + I[:,t])
+        k1e = -Enodes[:,t] + g*np.dot(G,phi(spont_act)) # Coupling
+        k1e += s*phi(Enodes[:,t]) + spont_act# Local processing
+        k1e = k1e/tau
+        # 
+        ave = Enodes[:,t] + k1e*dt
+        #
+        # With auto-correlation
+        spont_act = (noise[:,t+1] + I[:,t+1])
+        k2e = -ave + g*np.dot(G,phi(spont_act)) # Coupling
+        k2e += s*phi(ave) + spont_act # Local processing
+        k2e = k2e/tau
 
-            Enodes[:,t+1] = Enodes[:,t] + (.5*(k1e+k2e))*dt
-        else:
-            spont_act = (noise[:,t-cs] + I[:,t-cs])
-            k1e = -Enodes[:,t-cs] + g*np.dot(G,phi(spont_act)) # Coupling
-            k1e += s*phi(Enodes[:,t-cs]) + spont_act# Local processing
-            k1e = k1e/tau
-            # 
-            ave = Enodes[:,t-cs] + k1e*dt
-            #
-            # With auto-correlation
-            spont_act = (noise[:,t+1-cs] + I[:,t+1-cs])
-            k2e = -ave + g*np.dot(G,phi(spont_act)) # Coupling
-            k2e += s*phi(ave) + spont_act # Local processing
-            k2e = k2e/tau
-
-            Enodes[:,t+1] = Enodes[:,t-cs] + (.5*(k1e+k2e))*dt
-            
+        Enodes[:,t+1] = Enodes[:,t] + (.5*(k1e+k2e))*dt
 
     return Enodes
+
 
 def hrf(times):
     """ 
