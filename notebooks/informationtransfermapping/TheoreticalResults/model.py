@@ -141,7 +141,7 @@ def networkModel(G, Tmax=100,dt=.1,g=1.0,s=1.0,tau=1,I=None, noise=None):
     if I is None: I = np.zeros((totalnodes,len(T)))
     # Noise parameter
     if noise is None: noise = np.zeros((totalnodes,len(T)))
-    if noise == 1: noise = np.random.normal(size=(totalnodes,len(T)))
+    elif noise == 1: noise = np.random.normal(size=(totalnodes,len(T)))
 
     # Initial conditions and empty arrays
     Enodes = np.zeros((totalnodes,len(T)))
