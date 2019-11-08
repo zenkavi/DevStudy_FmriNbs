@@ -170,7 +170,7 @@ def networkModel(G, Tmax=100,dt=.1,g=1.0,s=1.0,tau=1,I=None, noise=None):
 
         Enodes[:,t+1] = Enodes[:,t] + (.5*(k1e+k2e))*dt
 
-    return Enodes
+    return (Enodes, noise)
 
 
 def hrf(times):
