@@ -122,7 +122,7 @@ def generateSynapticNetwork(W, showplot=False):
         
     return G
 
-def networkModel(G, Tmax=100,dt=.1,g=1.0,s=1.0,tau=1,I=None, noise=None):
+def networkModel(G, Tmax=100,dt=.1,g=1.0,s=1.0,tau=1,I=None, noise=None, noise_loc = 0, noise_scale = 1):
     """
     G = Synaptic Weight Matrix
     Tmax = 100      (1sec / 1000ms)
@@ -141,7 +141,7 @@ def networkModel(G, Tmax=100,dt=.1,g=1.0,s=1.0,tau=1,I=None, noise=None):
     if I is None: I = np.zeros((totalnodes,len(T)))
     # Noise parameter
     if noise is None: noise = np.zeros((totalnodes,len(T)))
-    elif noise == 1: noise = np.random.normal(size=(totalnodes,len(T)))
+    elif noise == 1: noise = np.random.normal(size=(totalnodes,len(T)), loc = noise_loc, scale = noise_scale)
 
     # Initial conditions and empty arrays
     Enodes = np.zeros((totalnodes,len(T)))
