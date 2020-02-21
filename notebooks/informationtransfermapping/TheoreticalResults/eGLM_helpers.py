@@ -1,9 +1,9 @@
+print("Importing eGLM helpers...")
 from collections import OrderedDict
 import copy
 import sys
 import numpy as np
 import matplotlib.pyplot as plt
-%matplotlib inline
 import pandas as pd
 import seaborn as sns
 sns.set_style("white")
@@ -16,12 +16,8 @@ sys.path.append('../../utils/')
 # Primary module with most model functions
 import model
 
-phi = lambda x: np.tanh(x)
-
-inv_phi = lambda x: np.arctanh(x)
-
-def check_symmetric(a, rtol=1e-05, atol=1e-08):
-    return np.allclose(a, a.T, rtol=rtol, atol=atol)
+def phi(x): 
+    return(np.tanh(x))
 
 def run_ucr_glm(all_nodes_ts, task_reg):
     
@@ -514,4 +510,4 @@ def plot_sim_network_glm(data,
     
     plt.legend(loc="best")
 
-
+print("All eGLM helpers imported!")
