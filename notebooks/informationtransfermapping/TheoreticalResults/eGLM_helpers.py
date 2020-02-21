@@ -352,6 +352,16 @@ def sim_network_task_glm(ncommunities = 3,
 
 def get_res_ts(sim):
     
+    """
+    Residualized the time series accouting for connectivity effects and leaving only the remaining effect of the task regressor
+
+    Parameters:
+        sim = simulation dictionary output from sim_network_task_glm
+
+    Returns: 
+        res_ts = residualized timeseries 2D array with nodes for nodes and time points for columns
+    """
+    
     num_nodes = sim['taskdata'].shape[0]
     num_ts = len(sim['ext_glms'][0].endog)
     
@@ -366,6 +376,21 @@ def get_res_ts(sim):
     return(res_ts)
 
 def get_res_taskreg(sim, node, dt=1, tau=1):
+    
+    """
+    Residualized time series and projected task regressor for one node
+
+    Parameters:
+        sim = simulation dictionary output from sim_network_task_glm
+        node = network node that will be used for residualization
+        dt = sampling rate
+        tau = time constant
+
+    Returns: 
+        res_y = residualized timeseries of given node
+        m_task_reg = projected task regressor
+    """
+    
     raw_y = sim['ext_glms'][node].endog
     X = sim['ext_glms'][node].exog[:,:-1]
     res_mod = sm.OLS(raw_y, X).fit()
@@ -385,7 +410,29 @@ def get_res_taskreg(sim, node, dt=1, tau=1):
     
     return(res_y, m_task_reg)
 
+
+#Baselines are calculated by 
+#- residualizing the time series taking out the effect of the rest of the network and autocorrelated activity
+#- averaging the activity level for when task is on (or taking the maximum if there is no noise)
+#- dividing by stimulus magnitude
+
 def get_true_baseline(sim, noise = False, stim_nodes = np.array(range(11)), nonstim_nodes = np.array(range(11, 105)), stim_mag = 0.5):
+    
+    """
+    Get baselines for stimulated and non stimulated nodes against which GLM results will be compared
+
+    Parameters:
+        sim = simulation dictionary output from sim_network_task_glm
+        noise = whether noise was added to the timeseries of the simulation
+        stim_nodes = nodes that are stimulated by the task
+        nonstim_nodes = nodes that are not stimulated by the task
+        stim_mag = magnitude of task stimulation
+
+    Returns: 
+        stim_baseline = baseline for stimulated nodes
+        nonstim_baseline = baseline for nonstimulated nodes
+        
+    """
     
     res_ts = get_res_ts(sim)
     
@@ -422,6 +469,25 @@ def plot_sim_network_glm(data,
                         ext_label = "eGLM (baseline)",
                          base_label = None,
                         alp = 1):
+    
+    """
+    Plotting wrapper comparing cGLM to eGLM results
+
+    Parameters:
+        data = simulation dictionary output from sim_network_task_glm
+        width = width of figure
+        height = height of figure
+        ncoms = number of communities
+        nnodes = number of nodes per community
+        task_type = "td" for topdown (not extended to include "bu" yet)
+        ucr_label = label for cGLM results
+        ext_label = label for eGLM results
+        base_label = label for baseline
+        alp = opacity level 
+
+    Returns: 
+        inline plot with nodes on the x axis and task parameter estimates on the y axis colored by GLM type
+    """
     
     totalnodes = ncoms*nnods
     
