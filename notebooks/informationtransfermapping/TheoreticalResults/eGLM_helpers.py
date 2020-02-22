@@ -412,7 +412,8 @@ def get_res_taskreg(sim, node, dt=1, tau=1):
 #- averaging the activity level for when task is on (or taking the maximum if there is no noise)
 #- dividing by stimulus magnitude
 
-def get_true_baseline(sim, noise = False, stim_nodes = np.array(range(11)), nonstim_nodes = np.array(range(11, 105)), stim_mag = 0.5):
+#def get_true_baseline(sim, noise = False, stim_nodes = np.array(range(11)), nonstim_nodes = np.array(range(11, 105)), stim_mag = 0.5):
+def get_true_baseline(sim):    
     
     """
     Get baselines for stimulated and non stimulated nodes against which GLM results will be compared
@@ -430,6 +431,7 @@ def get_true_baseline(sim, noise = False, stim_nodes = np.array(range(11)), nons
         
     """
     
+    """
     res_ts = get_res_ts(sim)
     
     stim_t = []
@@ -454,6 +456,20 @@ def get_true_baseline(sim, noise = False, stim_nodes = np.array(range(11)), nons
     nonstim_baseline = np.mean(nonstim_t)/stim_mag
     
     return(stim_baseline, nonstim_baseline)
+    """
+    
+    #needs fixing/more arguments for other types of tasks
+    task_timing = make_stimtimes(Tmax = sim['taskdata'].shape[1], dt=1, stim_nodes=range(11), stim_mag=0.5)
+    task_indices = np.where(task_timing>0)
+    
+    baseline_vec = []
+    
+    for cur_node in range(sim['taskdata'].shape[0]):
+        res_y, m_task_reg = get_res_taskreg(sim, cur_node)
+        node_baseline = np.mean(res_y[task_indices])/np.mean(m_task_reg[task_indices])
+        baseline_vec.append(node_baseline)
+    
+    return(baseline_vec)
 
 def plot_sim_network_glm(data,
                          width = 8,
@@ -493,12 +509,12 @@ def plot_sim_network_glm(data,
     plt.plot(data['ucr_betas'], alpha = alp, color = "C0", label = ucr_label)
     plt.plot(data['ext_betas'], alpha = alp, color = "C1", label = ext_label)
     
-    stim_baseline, nonstim_baseline = get_true_baseline(data)
+    baseline_vec = get_true_baseline(data)
     
 
     all_nodes = list(range(totalnodes))
     stim_ind = [1 if x in data['stim_nodes'] else 0 for x in all_nodes]
-    baseline_vec = [stim_baseline if x == 1 else nonstim_baseline for x in stim_ind]
+    #baseline_vec = [stim_baseline if x == 1 else nonstim_baseline for x in stim_ind]
     plt.plot(baseline_vec, 
      color = "black", linestyle = '--', label = base_label, alpha = alp)
     
