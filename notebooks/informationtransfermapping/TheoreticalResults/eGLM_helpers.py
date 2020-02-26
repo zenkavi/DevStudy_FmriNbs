@@ -146,7 +146,7 @@ def run_ext_glm(all_nodes_ts, task_reg, weight_matrix, dt, tau, g, s):
     return ({"ext_task_betas": ext_task_betas,
             "ext_mods": ext_mods})
 
-def make_stimtimes(Tmax, dt, stim_nodes, stim_mag, tasktiming=None, ncommunities = 3,nodespercommunity = 35):
+def make_stimtimes(Tmax, dt, stim_nodes, stim_mag, tasktiming=None, ncommunities = 3,nodespercommunity = 35,  sa = 500, ea = 1000, iv = 2000):
     
     """
     Creates timeseries for all nodes in network
@@ -171,7 +171,7 @@ def make_stimtimes(Tmax, dt, stim_nodes, stim_mag, tasktiming=None, ncommunities
     if tasktiming is None:
         tasktiming = np.zeros((1,len(T)))
         for t in range(len(T)):
-            if t%2000>500 and t%2000<1000:
+            if t%iv>sa and t%iv<ea:
                 tasktiming[0,t] = 1.0
     stimtimes = np.zeros((totalnodes,len(T)))
     
