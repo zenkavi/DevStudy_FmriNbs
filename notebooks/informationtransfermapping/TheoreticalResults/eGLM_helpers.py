@@ -434,16 +434,16 @@ def get_true_baseline(sim, stim_nodes = range(11)):
     
     res_ts = get_res_ts(sim)
     
-    #calculate only once for speed
-    res_y, m_task_reg = get_res_taskreg(sim, stim_nodes[0])
+    #calculate residualized task regressor using only once for speed using the residualizing matrix from one stimulated node's regression only
+    tmp_res_y, m_task_reg = get_res_taskreg(sim, stim_nodes[0])
     
-    #for cur_node in range(sim['taskdata'].shape[0]):
     for cur_node in range(res_ts.shape[0]):
         if cur_node in stim_nodes:
             res_y = res_ts[cur_node,:]
             #in case task regressor is cut to run faster
             cur_task_indices = task_indices[0][np.where(task_indices[0]<res_y.shape[0])]
-            node_baseline = np.mean(res_y[cur_task_indices])/np.mean(m_task_reg[cur_task_indices])
+            #node_baseline = np.mean(res_y[cur_task_indices])/np.mean(m_task_reg[cur_task_indices])
+            node_baseline = sm.OLS(res_y, m_task_reg).fit().params[0]
             baseline_vec.append(node_baseline)
         else:
             baseline_vec.append(0)
