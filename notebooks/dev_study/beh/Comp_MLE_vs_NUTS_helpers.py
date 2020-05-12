@@ -10,11 +10,21 @@ import theano
 import theano.tensor as tt
 import arviz as az
 
-def generate_data(alpha, beta, n=100, 
+def generate_data(alpha= np.nan, alpha_neg= np.nan, alpha_pos= np.nan, exp=1, exp_neg= np.nan, exp_pos= np.nan, beta= np.nan, 
+                  n=100, 
                   p_r={'high_var': [.95, .05], 'low_var': [.5,.5]},
                   rs = np.array(([5.0, -495.0],[-5.0, 495.0],[10.0, -100.0],[-10.0, 100.0])),
                   sQ = np.zeros((4, 2))
                  ):
+    
+    # Initialize parameters
+    if np.isnan(alpha_neg) and np.isnan(alpha_pos) and np.isnan(alpha) == False:
+        alpha_neg = alpha
+        alpha_pos = alpha
+        
+    if np.isnan(exp_neg) and np.isnan(exp_pos) and np.isnan(exp) == False:
+        exp_neg = exp
+        exp_pos = exp
     
     # Need to denote both machine type and action
     
@@ -68,8 +78,20 @@ def generate_data(alpha, beta, n=100,
             r = np.random.choice(rs[cur_machine], p = p_r[cur_p]) 
             
             # Update Q table only if the machine is played
-            # And only the value of playing NOT of not playing
-            Q[cur_machine][a] = Q[cur_machine][a] + alpha * (r - Q[cur_machine][a])
+            # And only the value of playing NOT if not playing
+            rpe = (r - Q[cur_machine][a])
+            
+            if rpe < 0:
+                if exp_neg != exp_pos:
+                     Q[cur_machine][a] = Q[cur_machine][a] + alpha_neg * abs(rpe)**exp_neg * (-1)
+                else:
+                    Q[cur_machine][a] = Q[cur_machine][a] + alpha_neg * abs(rpe)**exp * (-1)
+                    
+            if rpe >= 0:
+                if exp_neg != exp_pos:
+                     Q[cur_machine][a] = Q[cur_machine][a] + alpha_pos * rpe**exp_pos
+                else:
+                    Q[cur_machine][a] = Q[cur_machine][a] + alpha_pos * rpe**exp
         
         # If the machine is not played then Q remains unchanged and no reward is received
         else:
