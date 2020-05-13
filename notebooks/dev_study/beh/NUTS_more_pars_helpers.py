@@ -8,6 +8,8 @@ import scipy
 import pymc3 as pm
 import theano
 import theano.tensor as tt
+from theano import tensor as T
+from theano.ifelse import ifelse as tifelse
 import arviz as az
 
 def generate_data(alpha_neg= np.nan, alpha_pos= np.nan, exp_neg= 1, exp_pos= 1, beta= np.nan,
@@ -127,13 +129,16 @@ def update_Q(machine, action, reward,
              Q,
             alpha_neg, alpha_pos, exp_neg, exp_pos):
 
+    a,b = T.scalars('a', 'b')
+    #z_switch = T.switch(T.lt(a, b), Q[machine, action] + alpha_neg * abs(rpe)**exp_neg * (-1), Q[machine, action] + alpha_pos * rpe**exp_pos)
+    z_ifelse = tifelse(T.lt(a, b), Q[machine, action] + alpha_neg * abs(rpe)**exp_neg * (-1), Q[machine, action] + alpha_pos * rpe**exp_pos)
+
+    #f_switch = theano.function([a, b], z_switch, mode=theano.Mode(linker='vm'))
+    f_ifelse = theano.function([a, b], z_ifelse, mode=theano.Mode(linker='vm'))
+
     rpe = (reward - Q[machine, action])
-
-    if rpe < 0:
-        Q_upd = Q[machine, action] + alpha_neg * abs(rpe)**exp_neg * (-1)
-
-    if rpe >= 0:
-        Q_upd = Q[machine, action] + alpha_pos * rpe**exp_pos
+    #Q_upd = f_switch(rpe, 0)
+    Q_upd = f_ifelse(rpe, 0)
 
     Q = tt.set_subtensor(Q[machine, action], Q_upd)
     return Q
