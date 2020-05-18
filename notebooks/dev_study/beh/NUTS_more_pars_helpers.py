@@ -13,7 +13,7 @@ from theano.ifelse import ifelse as tifelse
 import arviz as az
 
 def generate_data(alpha_neg= np.nan, alpha_pos= np.nan, exp_neg= 1, exp_pos= 1, beta= np.nan,
-                  n=100,
+                  n=120,
                   p_r={'high_var': [.95, .05], 'low_var': [.5,.5]},
                   rs = np.array(([5.0, -495.0],[-5.0, 495.0],[10.0, -100.0],[-10.0, 100.0])),
                   sQ = np.zeros((4, 2))
@@ -128,20 +128,16 @@ def llik_td_vectorized(x, *args):
 def update_Q(machine, action, reward,
              Q,
             alpha_neg, alpha_pos, exp_neg, exp_pos):
+    
+    theano.config.compute_test_value = 'ignore'
+    rpe = reward- Q[machine, action]
 
-    rpe = (reward - Q[machine, action])
-
-    if rpe.eval() < 0:
-        Q_upd = Q[machine, action] + alpha_neg * abs(rpe)**exp_neg * (-1)
-
-    if rpe.eval() >= 0:
-        Q_upd = Q[machine, action] + alpha_pos * rpe**exp_pos
+    Q_upd = tt.switch(rpe<0, Q[machine, action] + alpha_neg * np.sqrt((rpe)**2)**exp_neg * (-1), Q[machine, action] + alpha_pos * rpe**exp_pos)
 
     Q = tt.set_subtensor(Q[machine, action], Q_upd)
     return Q
-    
-    
-def theano_llik_td(alpha_neg=np.nan, alpha_pos=np.nan, exp_neg=1, exp_pos=1, beta=np.nan, machines=np.nan, actions=np.nan, rewards=np.nan, n=120):
+
+def theano_llik_td(alpha_neg, alpha_pos, exp_neg, exp_pos, beta, machines, actions, rewards):
 
     #For single learning set alpha_neg = alpha_pos
     #For value distortion set exp_neg != 1, exp_pos != 1
@@ -155,18 +151,25 @@ def theano_llik_td(alpha_neg=np.nan, alpha_pos=np.nan, exp_neg=1, exp_pos=1, bet
     # Initialize the Q table
     Qs = tt.zeros((4,2), dtype='float64')
 
+    alpha_neg = tt.scalar("alpha_neg")
+    alpha_pos = tt.scalar("alpha_pos")
+    exp_neg = tt.scalar("exp_neg")
+    exp_pos = tt.scalar("exp_pos")
+    beta = tt.scalar("beta")
+
     # Compute the Q values for each trial
     Qs, updates = theano.scan(
         fn=update_Q,
         sequences=[machines_, actions_, rewards_],
         outputs_info=[Qs],
         non_sequences=[alpha_neg, alpha_pos, exp_neg, exp_pos])
-
-    int_Qs = tt.zeros((1, 4,2), dtype='float64')
+    
+    int_Qs = tt.zeros((1, 4, 2), dtype='float64')
 
     Qs = tt.concatenate((int_Qs, Qs), axis=0)
 
     # Apply the softmax transformation
+    n=len(actions)
     idx = list(zip(range(n),machines)) #list of tuples
     obs_Qs = [Qs[i] for i in idx]
     Qs_ = obs_Qs * beta
@@ -174,6 +177,7 @@ def theano_llik_td(alpha_neg=np.nan, alpha_pos=np.nan, exp_neg=1, exp_pos=1, bet
 
     # Calculate the negative log likelihod of the observed actions
     log_prob_actions = log_prob_actions[tt.arange(actions_.shape[0]), actions_]
+    theano.config.compute_test_value = 'ignore'
     return tt.sum(log_prob_actions[1:])
 
 
@@ -192,7 +196,6 @@ def get_nuts_est(t_alpha_neg = np.nan, t_alpha_pos = np.nan, t_exp_neg = 1, t_ex
         s_exp_neg = pm.Beta('exp_neg', 1, 1)
         s_exp_pos = pm.Beta('exp_pos', 1, 1)
         s_beta = pm.HalfNormal('beta', 10)
-
         like = pm.Potential('like', theano_llik_td(s_alpha_neg, s_alpha_pos, s_exp_neg, s_exp_pos, s_beta, machines, actions, rewards, n))
         tr = pm.sample()
 
