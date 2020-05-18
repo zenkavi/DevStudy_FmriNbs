@@ -129,20 +129,18 @@ def update_Q(machine, action, reward,
              Q,
             alpha_neg, alpha_pos, exp_neg, exp_pos):
 
-    a,b = T.scalars('a', 'b')
-    #z_switch = T.switch(T.lt(a, b), Q[machine, action] + alpha_neg * abs(rpe)**exp_neg * (-1), Q[machine, action] + alpha_pos * rpe**exp_pos)
-    z_ifelse = tifelse(T.lt(a, b), Q[machine, action] + alpha_neg * abs(rpe)**exp_neg * (-1), Q[machine, action] + alpha_pos * rpe**exp_pos)
-
-    #f_switch = theano.function([a, b], z_switch, mode=theano.Mode(linker='vm'))
-    f_ifelse = theano.function([a, b], z_ifelse, mode=theano.Mode(linker='vm'))
-
     rpe = (reward - Q[machine, action])
-    #Q_upd = f_switch(rpe, 0)
-    Q_upd = f_ifelse(rpe, 0)
+
+    if rpe.eval() < 0:
+        Q_upd = Q[machine, action] + alpha_neg * abs(rpe)**exp_neg * (-1)
+
+    if rpe.eval() >= 0:
+        Q_upd = Q[machine, action] + alpha_pos * rpe**exp_pos
 
     Q = tt.set_subtensor(Q[machine, action], Q_upd)
     return Q
-
+    
+    
 def theano_llik_td(alpha_neg=np.nan, alpha_pos=np.nan, exp_neg=1, exp_pos=1, beta=np.nan, machines=np.nan, actions=np.nan, rewards=np.nan, n=120):
 
     #For single learning set alpha_neg = alpha_pos
