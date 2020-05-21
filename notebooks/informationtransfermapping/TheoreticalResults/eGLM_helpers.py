@@ -10,6 +10,7 @@ sns.set_style("white")
 import scipy.stats as stats
 import statsmodels.api as sm
 import statsmodels.formula.api as smf
+from sklearn.preprocessing import scale
 
 sys.path.append('../')
 sys.path.append('../../utils/')
@@ -19,7 +20,7 @@ import model
 def phi(x): 
     return(np.tanh(x))
 
-def run_ucr_glm(all_nodes_ts, task_reg):
+def run_ucr_glm(all_nodes_ts, task_reg, standardize=True):
     
     """
     Runs classical GLM looping through each node of a network
@@ -40,15 +41,18 @@ def run_ucr_glm(all_nodes_ts, task_reg):
     
     for region in range(0, nregions):
         cur_y = all_nodes_ts[region,:]
-        ucr_mod = sm.OLS(cur_y, task_reg)
+        if standardize:
+            ucr_mod = sm.OLS(scale(cur_y), scale(task_reg)) 
+        else:
+            ucr_mod = sm.OLS(cur_y, task_reg)
         ucr_res = ucr_mod.fit()
         ucr_task_betas[region] = ucr_res.params[0]
         ucr_mods.append(ucr_mod)
     
     return ({"ucr_task_betas":ucr_task_betas,
-            "ucr_mods": ucr_mods})
+             "ucr_mods": ucr_mods})
 
-def run_ext_glm(all_nodes_ts, task_reg, weight_matrix, dt, tau, g, s): 
+def run_ext_glm(all_nodes_ts, task_reg, weight_matrix, dt, tau, g, s, standardize=True): 
     
     """
     Runs extended GLM looping through each node of a network
@@ -71,7 +75,7 @@ def run_ext_glm(all_nodes_ts, task_reg, weight_matrix, dt, tau, g, s):
     nregions = all_nodes_ts.shape[0]
     ext_task_betas = np.zeros((nregions))
     ext_mods = []
-    
+       
     for region in range(0, nregions):
         cur_y = all_nodes_ts[region,:]
         incoming_connections = weight_matrix[region, :]
@@ -128,23 +132,33 @@ def run_ext_glm(all_nodes_ts, task_reg, weight_matrix, dt, tau, g, s):
         cur_n_next_task = (dt/(2*tau))*task_reg[1:]
         
         #All IVs in design matrix
-        df = pd.DataFrame(data = {"cur_y" : cur_y,
-                                 "other_ns_cur_spont": other_ns_cur_spont,
-                                 "cur_y_phi": cur_y_phi,
-                                 "cur_n_task": cur_n_task,
-                                 "other_ns_next_spont": other_ns_next_spont,
-                                 "cur_n_first_appr": cur_n_first_appr,
-                                 "cur_n_next_task": cur_n_next_task})
-
-        ext_mod = smf.ols(formula = 'next_y ~ -1 + cur_y + other_ns_cur_spont + cur_y_phi + cur_n_task + other_ns_next_spont + cur_n_first_appr + cur_n_next_task', data = df)
+        df = pd.DataFrame(data = {"next_y": next_y,
+                                  "cur_y" : cur_y,
+                                  "other_ns_cur_spont": other_ns_cur_spont,
+                                  "cur_y_phi": cur_y_phi,
+                                  "cur_n_task": cur_n_task,
+                                  "other_ns_next_spont": other_ns_next_spont,
+                                  "cur_n_first_appr": cur_n_first_appr,
+                                  "cur_n_next_task": cur_n_next_task})
+        
+        s_df = pd.DataFrame(scale(df))
+        s_df.rename(columns={i:j for i,j in zip(s_df.columns,df.columns)}, inplace=True)
+        
+        if standardize:
+            ext_mod = smf.ols(formula = 'next_y ~ -1 + cur_y + other_ns_cur_spont + cur_y_phi + cur_n_task + other_ns_next_spont + cur_n_first_appr + cur_n_next_task', data = s_df)
+        else:
+             ext_mod = smf.ols(formula = 'next_y ~ -1 + cur_y + other_ns_cur_spont + cur_y_phi + cur_n_task + other_ns_next_spont + cur_n_first_appr + cur_n_next_task', data = df)
+        
         ext_res = ext_mod.fit()
         ext_params = ext_res.params
 
+        # What was the *(dt/(2*tau)) for?
         ext_task_betas[region] = (dt/(2*tau))*ext_params["cur_n_next_task"]
         ext_mods.append(ext_mod)
-    
-    return ({"ext_task_betas": ext_task_betas,
-            "ext_mods": ext_mods})
+        
+    else:
+        return ({"ext_task_betas": ext_task_betas,
+                 "ext_mods": ext_mods})
 
 def make_stimtimes(Tmax, dt, stim_nodes, stim_mag, tasktiming=None, ncommunities = 3, nodespercommunity = 35,  sa = 500, ea = 1000, iv = 2000):
     
@@ -198,25 +212,27 @@ def sim_network_task_glm(ncommunities = 3,
                          Tmax = 100000, 
                          plot_task = False, 
                          stimsize = np.floor(35/3.0), 
-                         tasktiming = None, 
                          noise = None,
                          noise_loc = 0, 
                          noise_scale = 0,
                          stim_mag = .5,
                          W = None,
+                         taskdata = None,
+                         tasktiming = None,
                          sa = 500,
                          ea = 1000,
-                         iv = 2000):
+                         iv = 2000,
+                         standardize=True):
     
     """
     Simulates task activity in network and runs both uncorrected and corrected GLMs to estimate task parameters
 
     Parameters:
-        ncommunities = number of communities in network
+        ncommunities = number of communities in network (needed even if W is provided)
         innetwork_dsity = probability of a node being connected to another in the same community
         outnetwork_dsity = probability of a node being connected to another in a different (non-hub) community
         hubnetwork_dsity = probability of a node being connected to another in a hub community
-        nodespercommunity = number of nodes per community in network
+        nodespercommunity = number of nodes per community in network (needed even if W is provided)
         plot_network = make plot showing the network connectivity weight matrix
         dt = sampling rate
         tau = time constany
@@ -228,15 +244,16 @@ def sim_network_task_glm(ncommunities = 3,
         Tmax = task length
         plot_task = Make plot of task timing
         stimsize = number of nodes that will be stimulated by the task
-        tasktiming = block task array is created if not specified. If specified must be of length Tmax/dt
         noise = Will noise be added to the timeseries
         noise_loc = Mean of normal distribution noise will be drawn from
         noise_scale = SD of normal distribution noise will be drawn from
         stim_mag = magnitude of stimulation
         W = alternative pre-specified weight matrix
+        tasktiming = block task array is created if not specified. If specified must be of length Tmax/dt
         sa = start point of stimulation
         ea = end point of stimulation
         iv = interstim interval
+        standardize = Should the timeseries and the design matrix be standardized for the GLMs
         
     Returns: 
         Dictionary with weight matrix, corrected and uncorrected task parameters and model objects, stimulated nodes, timeseries for all nodes
@@ -330,7 +347,8 @@ def sim_network_task_glm(ncommunities = 3,
     # Make task data (timeseries for all nodes)
     #############################################
     
-    taskdata, error = model.networkModel(W,Tmax=Tmax,dt=dt,g=g,s=s,tau=tau, I=stimtimes, noise=noise, noise_loc = noise_loc, noise_scale = noise_scale)
+    if taskdata is None:
+        taskdata, error = model.networkModel(W,Tmax=Tmax,dt=dt,g=g,s=s,tau=tau, I=stimtimes, noise=noise, noise_loc = noise_loc, noise_scale = noise_scale)
     
     #Use only a subset of data for GLM's if it's too long
     if taskdata.shape[1]>44999:
@@ -345,16 +363,17 @@ def sim_network_task_glm(ncommunities = 3,
     # Run uncorrected and extended GLM to compare task regressor
     #############################################
     
-    ucr_model = run_ucr_glm(all_nodes_ts = y, task_reg = I[stim_nodes[0],:])
+    ucr_model = run_ucr_glm(all_nodes_ts = y, task_reg = I[stim_nodes[0],:], standardize=standardize)
     ext_model = run_ext_glm(all_nodes_ts = y, task_reg = I[stim_nodes[0],:], 
-                          weight_matrix = W, dt = dt, tau = tau, g = g, s = s)
+                            weight_matrix = W, dt = dt, tau = tau, g = g, s = s,
+                            standardize=standardize)
     
     ucr_betas = ucr_model["ucr_task_betas"]
     ext_betas = ext_model["ext_task_betas"]
     
     ucr_glms = ucr_model["ucr_mods"]
     ext_glms = ext_model["ext_mods"]
-        
+    
     return({"W":W, "ucr_betas": ucr_betas, "ucr_glms": ucr_glms, "ext_betas": ext_betas, "ext_glms": ext_glms,
             "stim_nodes": stim_nodes, "taskdata": taskdata})
 
@@ -400,17 +419,21 @@ def get_res_taskreg(sim, node, dt=1, tau=1):
     """
     
     raw_y = sim['ext_glms'][node].endog
+    #design matrix without the task regressor
     X = sim['ext_glms'][node].exog[:,:-1]
     res_mod = sm.OLS(raw_y, X).fit()
     res_y = res_mod.resid
     
     #get projection matrix
     cur_p = np.dot(np.dot(X, np.linalg.pinv(np.dot(X.T, X))), X.T)
+    
+    #get residual making annihilator matrix
     cur_m = np.identity(cur_p.shape[0])-cur_p
     
-    #task regressor in the design matrix is task*c where c = dt/(2*tau)
+    #task regressor in the design matrix is task*c where c = dt/(2*tau) is in the last column
     task_reg = sim['ext_glms'][node].exog[:,-1]
     
+    #apply annihilator matrix on the raw task regressor
     m_task_reg = np.dot(cur_m, task_reg)
     
     #to capture the relationship between the projected but not transformed/true task regressor apply the inverse of the operation
@@ -419,14 +442,15 @@ def get_res_taskreg(sim, node, dt=1, tau=1):
     
     return(res_y, m_task_reg)
 
-
-#Baselines are calculated by 
+# Baselines are calculated by 
 #- residualizing the time series taking out the effect of the rest of the network and autocorrelated activity
 #- for stimulated nodes: regressing the residualized timeseries onto the task regressor that's been projected and inverted
-# --> is this the samething as getting the partial correlation?
+# --> is this the samething as getting the partial correlation? No. Partial correlation residualizes both x and y wrt the same 
+# covariates and then looks at the relationship between them. This only projects the raw regressor into the prediction space of y
+# it does NOT account for the transformations that have been applied to the task regressor. 
 #- for non-stim nodes: append 0
 
-def get_true_baseline(sim, stim_nodes = range(11), dt = 1, stim_mag=0.5):    
+def get_true_baseline(sim, stim_nodes = range(11), dt = 1, stim_mag=0.5, tasktiming = None, sa = 500, ea = 1000, iv = 2000):    
     
     """
     Get baselines for stimulated and non stimulated nodes against which GLM results will be compared
@@ -436,48 +460,72 @@ def get_true_baseline(sim, stim_nodes = range(11), dt = 1, stim_mag=0.5):
         stim_nodes = nodes that are stimulated by the task
         dt = sampling rate
         stim_mag = stimulus magnitude
+        tasktiming = block task array is created if not specified. If specified must be of length Tmax/dt
+        sa = start point of stimulation
+        ea = end point of stimulation
+        iv = interstim interval
 
     Returns: 
         baseline_vec = baseline for all nodes
         
     """
     
-    #needs fixing/more arguments for other types of tasks
-    task_timing = make_stimtimes(Tmax = sim['taskdata'].shape[1], dt=1, stim_nodes=stim_nodes, stim_mag=0.5)[0]
+    # needs fixing/more arguments for other types of tasks
+    if tasktiming is None:
+        task_timing = make_stimtimes(Tmax = sim['taskdata'].shape[1], dt=1, stim_nodes=stim_nodes, tasktiming = tasktiming, stim_mag=0.5, sa = sa, ea = ea, iv = iv)[0]
     task_indices = np.where(task_timing>0)
+    
+    # make sure the task indices aren't longer than the node timeseries
+    # in case task regressor is cut in sim_network_task_glm to run faster
+    if sim['taskdata'].shape[1]<len(task_indices):
+        task_indices = task_indices[0][np.where(task_indices[0]<sim['taskdata'].shape[0])]
     
     baseline_vec = []
     
-    res_ts = get_res_ts(sim)
-    
-    #For large networks
-    if res_ts.shape()[0]>10:
-        #calculate residualized task regressor using only once for speed using the residualizing matrix from one stimulated node's regression only
+    # For large networks (if network has more than 10 nodes)
+    # Most cases except for POC networks
+    if sim['taskdata'].shape[0]>10:
+        
+        res_ts = get_res_ts(sim)
+        
+        # calculate residualized task regressor using only once for speed 
+        # using the residualizing matrix from one stimulated node's regression only
         tmp_res_y, m_task_reg = get_res_taskreg(sim, stim_nodes[0])
 
         for cur_node in range(res_ts.shape[0]):
             if cur_node in stim_nodes:
                 res_y = res_ts[cur_node,:]
-                #in case task regressor is cut in sim_network_task_glm to run faster
-                cur_task_indices = task_indices[0][np.where(task_indices[0]<res_y.shape[0])]
-                #node_baseline = np.mean(res_y[cur_task_indices])/np.mean(m_task_reg[cur_task_indices])
                 node_baseline = sm.OLS(res_y, m_task_reg).fit().params[0]
                 baseline_vec.append(node_baseline)
+            
+            # For speed: not calculating proper baselines for non-stim nodes. Just adding 0 since they are not stimulated directly by task
+            # This should be underestimating the true baseline for these nodes if they have any incoming connections from stim nodes
             else:
                 baseline_vec.append(0)
+        
+        # If the network is small enough calculate the projected task regressor for all nodes
+    else:
+        for cur_node in range(sim['taskdata'].shape[0]):
+                
+            res_y, m_task_reg = get_res_taskreg(sim, cur_node)
+            node_baseline = sm.OLS(res_y, m_task_reg).fit().params[0]
+            baseline_vec.append(node_baseline)
+            
     
     return(baseline_vec)
 
 def plot_sim_network_glm(data,
                          width = 8,
-                        height = 6,
-                        ncoms = 3,
-                        nnods = 35,
-                        task_type = "td",
-                        ucr_label = "cGLM (baseline)",
-                        ext_label = "eGLM (baseline)",
+                         height = 6,
+                         ncoms = 3,
+                         nnods = 35,
+                         task_type = "td",
+                         ucr_label = "cGLM (baseline)",
+                         ext_label = "eGLM (baseline)",
                          base_label = None,
-                        alp = 1):
+                         alp = 1,
+                         stim_nodes = range(11),
+                         tasktiming = None, sa = 500, ea = 1000, iv = 200):
     
     """
     Plotting wrapper comparing cGLM to eGLM results
@@ -493,6 +541,11 @@ def plot_sim_network_glm(data,
         ext_label = label for eGLM results
         base_label = label for baseline
         alp = opacity level 
+        stim_nodes = nodes that are stimulated by the task
+        tasktiming = block task array is created if not specified. If specified must be of length Tmax/dt
+        sa = start point of stimulation
+        ea = end point of stimulation
+        iv = interstim interval
 
     Returns: 
         inline plot with nodes on the x axis and task parameter estimates on the y axis colored by GLM type
@@ -506,7 +559,7 @@ def plot_sim_network_glm(data,
     plt.plot(data['ucr_betas'], alpha = alp, color = "C0", label = ucr_label)
     plt.plot(data['ext_betas'], alpha = alp, color = "C1", label = ext_label)
     
-    baseline_vec = get_true_baseline(data)
+    baseline_vec = get_true_baseline(data, stim_nodes = stim_nodes, tasktiming = tasktiming, sa = sa, ea = ea, iv = iv)
     
 
     all_nodes = list(range(totalnodes))
