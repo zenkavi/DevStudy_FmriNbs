@@ -146,7 +146,7 @@ def run_ext_glm(all_nodes_ts, task_reg, weight_matrix, dt, tau, g, s):
     return ({"ext_task_betas": ext_task_betas,
             "ext_mods": ext_mods})
 
-def make_stimtimes(Tmax, dt, stim_nodes, stim_mag, tasktiming=None, ncommunities = 3,nodespercommunity = 35,  sa = 500, ea = 1000, iv = 2000):
+def make_stimtimes(Tmax, dt, stim_nodes, stim_mag, tasktiming=None, ncommunities = 3, nodespercommunity = 35,  sa = 500, ea = 1000, iv = 2000):
     
     """
     Creates timeseries for all nodes in network
@@ -158,6 +158,9 @@ def make_stimtimes(Tmax, dt, stim_nodes, stim_mag, tasktiming=None, ncommunities
         tasktiming = block task array is created if not specified. If specified must be of length Tmax/dt
         ncommunities = number of communities in network
         nodespercommunity = number of nodes per community in network
+        sa = start point of stimulation
+        ea = end point of stimulation
+        iv = interstim interval
 
     Returns: 
         2D array with nodes in rows and time points in columns
@@ -169,18 +172,19 @@ def make_stimtimes(Tmax, dt, stim_nodes, stim_mag, tasktiming=None, ncommunities
     # This timing is irrespective of the task being performed
     # Tasks are only determined by which nodes are stimulated
     if tasktiming is None:
-        tasktiming = np.zeros((1,len(T)))
+        tasktiming = np.zeros((len(T)))
         for t in range(len(T)):
             if t%iv>sa and t%iv<ea:
-                tasktiming[0,t] = 1.0
+                tasktiming[t] = 1.0
+    
     stimtimes = np.zeros((totalnodes,len(T)))
     
     # When task is ON the activity for a stim_node at that time point changes the size of stim_mag
     for t in range(len(T)):
-        if tasktiming[0,t] == 1:
+        if tasktiming[t] == 1:
             stimtimes[stim_nodes,t] = stim_mag
             
-    return(stimtimes)
+    return(tasktiming, stimtimes)
 
 def sim_network_task_glm(ncommunities = 3, 
                          innetwork_dsity = .60, 
@@ -199,7 +203,10 @@ def sim_network_task_glm(ncommunities = 3,
                          noise_loc = 0, 
                          noise_scale = 0,
                          stim_mag = .5,
-                         W = None):
+                         W = None,
+                         sa = 500,
+                         ea = 1000,
+                         iv = 2000):
     
     """
     Simulates task activity in network and runs both uncorrected and corrected GLMs to estimate task parameters
@@ -227,11 +234,17 @@ def sim_network_task_glm(ncommunities = 3,
         noise_scale = SD of normal distribution noise will be drawn from
         stim_mag = magnitude of stimulation
         W = alternative pre-specified weight matrix
+        sa = start point of stimulation
+        ea = end point of stimulation
+        iv = interstim interval
         
     Returns: 
         Dictionary with weight matrix, corrected and uncorrected task parameters and model objects, stimulated nodes, timeseries for all nodes
     """
-
+    
+    #############################################
+    # Create network
+    #############################################
 
     if W is None:        
         totalnodes = nodespercommunity*ncommunities
@@ -254,36 +267,19 @@ def sim_network_task_glm(ncommunities = 3,
         sns.heatmap(W, xticklabels=False, yticklabels=False)
         plt.xlabel('Regions')
         plt.ylabel('Regions')
-        plt.title("Synaptic Weight Matrix -- Coupling Matrix")
+        plt.title("Synaptic Weight Matrix")
 
-    T = np.arange(0,Tmax,dt)
-
-    # Construct timing array for convolution 
-    # This timing is irrespective of the task being performed
-    # Tasks are only determined by which nodes are stimulated
-    if tasktiming is None:
-        tasktiming = np.zeros((1,len(T)))
-        for t in range(len(T)):
-            if t%2000>500 and t%2000<1000:
-                tasktiming[0,t] = 1.0
-
-    if plot_task:
-        if len(T)>9999:
-            plt.plot(T[:10000], tasktiming[0,:10000])
-            plt.ylim(top = 1.2, bottom = -0.1)
-        else:
-            plt.plot(T, tasktiming[0,:])
-            plt.ylim(top = 1.2, bottom = -0.1)
-
-    stimtimes = np.zeros((totalnodes,len(T)))
-
+    #############################################
+    # Get stim nodes
+    #############################################
+    
     # Construct a community affiliation vector
     Ci = np.repeat(np.arange(ncommunities),nodespercommunity) 
     # Identify the regions associated with the hub network (hub network is by default the 0th network)
     hub_ind = np.where(Ci==0)[0] 
 
     if topdown:
-        stim_nodes_td = np.arange(0, stimsize,dtype=int)
+        stim_nodes_td = np.arange(0, stimsize, dtype=int)
     else:
         stim_nodes_td = None
     
@@ -314,14 +310,27 @@ def sim_network_task_glm(ncommunities = 3,
     else:
         stim_nodes = stim_nodes_bu
     
-    # When task is ON the activity for a stim_node at that time point changes the size of stim_mag
-    for t in range(len(T)):
-        if tasktiming[0,t] == 1:
-            stimtimes[stim_nodes,t] = stim_mag
+    #############################################
+    # Make task and node stimulus timing
+    #############################################
+   
+    tasktiming, stimtimes = make_stimtimes(Tmax=Tmax, dt=dt, stim_nodes=stim_nodes, stim_mag=stim_mag, 
+                   tasktiming=tasktiming, ncommunities = ncommunities, nodespercommunity = nodespercommunity,  
+                   sa = sa, ea = ea, iv = iv)
 
-    #Make task data
-    out = model.networkModel(W,Tmax=Tmax,dt=dt,g=g,s=s,tau=tau, I=stimtimes, noise=noise, noise_loc = noise_loc, noise_scale = noise_scale)
-    taskdata = out[0]
+    if plot_task:
+        if len(T)>9999:
+            plt.plot(T[:10000], tasktiming[0,:10000])
+            plt.ylim(top = 1.2, bottom = -0.1)
+        else:
+            plt.plot(T, tasktiming[0,:])
+            plt.ylim(top = 1.2, bottom = -0.1)
+
+    #############################################
+    # Make task data (timeseries for all nodes)
+    #############################################
+    
+    taskdata, error = model.networkModel(W,Tmax=Tmax,dt=dt,g=g,s=s,tau=tau, I=stimtimes, noise=noise, noise_loc = noise_loc, noise_scale = noise_scale)
     
     #Use only a subset of data for GLM's if it's too long
     if taskdata.shape[1]>44999:
@@ -331,8 +340,11 @@ def sim_network_task_glm(ncommunities = 3,
     else:
         y = copy.copy(taskdata)
         I = copy.copy(stimtimes)
-
+        
+    #############################################
     # Run uncorrected and extended GLM to compare task regressor
+    #############################################
+    
     ucr_model = run_ucr_glm(all_nodes_ts = y, task_reg = I[stim_nodes[0],:])
     ext_model = run_ext_glm(all_nodes_ts = y, task_reg = I[stim_nodes[0],:], 
                           weight_matrix = W, dt = dt, tau = tau, g = g, s = s)
@@ -391,7 +403,8 @@ def get_res_taskreg(sim, node, dt=1, tau=1):
     X = sim['ext_glms'][node].exog[:,:-1]
     res_mod = sm.OLS(raw_y, X).fit()
     res_y = res_mod.resid
-
+    
+    #get projection matrix
     cur_p = np.dot(np.dot(X, np.linalg.pinv(np.dot(X.T, X))), X.T)
     cur_m = np.identity(cur_p.shape[0])-cur_p
     
@@ -409,10 +422,11 @@ def get_res_taskreg(sim, node, dt=1, tau=1):
 
 #Baselines are calculated by 
 #- residualizing the time series taking out the effect of the rest of the network and autocorrelated activity
-#- for stimulated nodes: dividing the mean activity level when task is on by mean residualized task regressor when task is on (using the residualizing matrix from one sample stimulated node)
+#- for stimulated nodes: regressing the residualized timeseries onto the task regressor that's been projected and inverted
+# --> is this the samething as getting the partial correlation?
 #- for non-stim nodes: append 0
 
-def get_true_baseline(sim, stim_nodes = range(11)):    
+def get_true_baseline(sim, stim_nodes = range(11), dt = 1, stim_mag=0.5):    
     
     """
     Get baselines for stimulated and non stimulated nodes against which GLM results will be compared
@@ -420,6 +434,8 @@ def get_true_baseline(sim, stim_nodes = range(11)):
     Parameters:
         sim = simulation dictionary output from sim_network_task_glm
         stim_nodes = nodes that are stimulated by the task
+        dt = sampling rate
+        stim_mag = stimulus magnitude
 
     Returns: 
         baseline_vec = baseline for all nodes
@@ -434,19 +450,21 @@ def get_true_baseline(sim, stim_nodes = range(11)):
     
     res_ts = get_res_ts(sim)
     
-    #calculate residualized task regressor using only once for speed using the residualizing matrix from one stimulated node's regression only
-    tmp_res_y, m_task_reg = get_res_taskreg(sim, stim_nodes[0])
-    
-    for cur_node in range(res_ts.shape[0]):
-        if cur_node in stim_nodes:
-            res_y = res_ts[cur_node,:]
-            #in case task regressor is cut to run faster
-            cur_task_indices = task_indices[0][np.where(task_indices[0]<res_y.shape[0])]
-            #node_baseline = np.mean(res_y[cur_task_indices])/np.mean(m_task_reg[cur_task_indices])
-            node_baseline = sm.OLS(res_y, m_task_reg).fit().params[0]
-            baseline_vec.append(node_baseline)
-        else:
-            baseline_vec.append(0)
+    #For large networks
+    if res_ts.shape()[0]>10:
+        #calculate residualized task regressor using only once for speed using the residualizing matrix from one stimulated node's regression only
+        tmp_res_y, m_task_reg = get_res_taskreg(sim, stim_nodes[0])
+
+        for cur_node in range(res_ts.shape[0]):
+            if cur_node in stim_nodes:
+                res_y = res_ts[cur_node,:]
+                #in case task regressor is cut in sim_network_task_glm to run faster
+                cur_task_indices = task_indices[0][np.where(task_indices[0]<res_y.shape[0])]
+                #node_baseline = np.mean(res_y[cur_task_indices])/np.mean(m_task_reg[cur_task_indices])
+                node_baseline = sm.OLS(res_y, m_task_reg).fit().params[0]
+                baseline_vec.append(node_baseline)
+            else:
+                baseline_vec.append(0)
     
     return(baseline_vec)
 

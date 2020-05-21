@@ -74,7 +74,7 @@ def generateStructuralNetwork(ncommunities=5, innetwork_dsity=.35, outnetwork_ds
     if showplot:
         plt.figure()
         plt.imshow(W, origin='lower',cmap='bwr')
-        plt.title('Structural Matrix with 5 communities\nand 1 hub-network', y=1.08)
+        plt.title('Structural Matrix', y=1.08)
         plt.xlabel('Regions')
         plt.ylabel('Regions')
         plt.colorbar()
@@ -146,7 +146,12 @@ def networkModel(G, Tmax=100,dt=.1,g=1.0,s=1.0,tau=1,I=None, noise=None, noise_l
     # Initial conditions and empty arrays
     Enodes = np.zeros((totalnodes,len(T)))
     # Initial conditions
-    Einit = np.random.rand(totalnodes,)
+        # AZE: changing initial conditions to 0 if there is a task simulation
+    if I is not None:
+        Einit = np.zeros((totalnodes,))
+    else:
+        Einit = np.random.rand(totalnodes,)
+    
     Enodes[:,0] = Einit
 
     spont_act = np.zeros((totalnodes,))
