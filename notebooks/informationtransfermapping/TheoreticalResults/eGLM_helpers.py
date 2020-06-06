@@ -20,7 +20,7 @@ import model
 def phi(x): 
     return(np.tanh(x))
 
-def run_ucr_glm(all_nodes_ts, task_reg, standardize=True):
+def run_ucr_glm(all_nodes_ts, task_reg, standardize=False):
     
     """
     Runs classical GLM looping through each node of a network
@@ -52,7 +52,7 @@ def run_ucr_glm(all_nodes_ts, task_reg, standardize=True):
     return ({"ucr_task_betas":ucr_task_betas,
              "ucr_mods": ucr_mods})
 
-def run_ext_glm(all_nodes_ts, task_reg, weight_matrix, dt, tau, g, s, standardize=True): 
+def run_ext_glm(all_nodes_ts, task_reg, weight_matrix, dt, tau, g, s, standardize=False): 
     
     """
     Runs extended GLM looping through each node of a network
@@ -153,6 +153,8 @@ def run_ext_glm(all_nodes_ts, task_reg, weight_matrix, dt, tau, g, s, standardiz
         ext_params = ext_res.params
 
         # What was the *(dt/(2*tau)) for?
+        # This is the operation applied to the task regressor in the design matrix
+        # 
         ext_task_betas[region] = (dt/(2*tau))*ext_params["cur_n_next_task"]
         ext_mods.append(ext_mod)
         
@@ -222,7 +224,7 @@ def sim_network_task_glm(ncommunities = 3,
                          sa = 500,
                          ea = 1000,
                          iv = 2000,
-                         standardize=True):
+                         standardize=False):
     
     """
     Simulates task activity in network and runs both uncorrected and corrected GLMs to estimate task parameters
