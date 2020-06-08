@@ -398,6 +398,7 @@ def get_res_ts(sim):
     
     for cur_node in range(res_ts.shape[0]):
         raw_y = sim['ext_glms'][cur_node].endog
+        # Drop task regressor column from the design matrix
         res_x = sim['ext_glms'][cur_node].exog[:,:-1]
         res_mod = sm.OLS(raw_y, res_x).fit()
         res_ts[cur_node,:] = res_mod.resid
